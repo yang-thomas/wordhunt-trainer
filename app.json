@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Word Hunt Trainer",
+    "slug": "wordhunt-trainer",
+    "scheme": "wordhunt-trainer",
+    "userInterfaceStyle": "light",
+    "web": {
+      "output": "single",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-status-bar"
+    ]
+  }
+}

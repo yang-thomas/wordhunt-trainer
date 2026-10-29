@@ -1,2 +1,10 @@
 node_modules/
 .DS_Store
+
+# Expo
+.expo/
+dist/
+expo-env.d.ts
+
+# Generated from data/words.txt by scripts/build-wordlist.mjs
+src/data/words.generated.ts
