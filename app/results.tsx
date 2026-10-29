@@ -5,6 +5,7 @@ import { Button } from '../src/Button';
 import { getTrie } from '../src/dictionary';
 import { generateBoard } from '../src/game';
 import { buildResults, parseFoundParam, type ResultWord } from '../src/round/results';
+import { newSeed } from '../src/seeds';
 import { colors } from '../src/theme';
 
 type Tab = 'all' | 'mine';
@@ -37,7 +38,10 @@ export default function ResultsScreen() {
         </Text>
         <Text style={styles.statsMuted}>Best possible: {results.maxScore.toLocaleString()} points</Text>
         <View style={styles.buttons}>
-          <Button label="Home" onPress={() => router.replace('/')} />
+          {/* Same seed = same board, so replaying is just opening the game with this seed again */}
+          <Button label="Replay this board" onPress={() => router.replace({ pathname: '/game', params: { seed } })} />
+          <Button label="New board" onPress={() => router.replace({ pathname: '/game', params: { seed: newSeed() } })} />
+          <Button label="Home" variant="secondary" onPress={() => router.replace('/')} />
         </View>
       </View>
 
