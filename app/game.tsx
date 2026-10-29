@@ -2,7 +2,6 @@ import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useReducer } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Board } from '../src/board/Board';
-import { Button } from '../src/Button';
 import { getTrie } from '../src/dictionary';
 import { generateBoard, wordFromPath, type Board as BoardTiles } from '../src/game';
 import {
@@ -22,6 +21,8 @@ const BOARD_SCALE = 0.75;
 const CONTENT_TOP_OFFSET = 100;
 /** How often the clock is checked, in ms. The deadline itself is a timestamp, so this only sets how fresh the display is. */
 const TICK_MS = 200;
+/** How long "Time's up!" shows before moving to the results, in ms. */
+const RESULTS_DELAY_MS = 1500;
 /** The timer turns red when this many seconds or fewer remain. */
 const LOW_TIME_SECONDS = 10;
 
@@ -59,6 +60,19 @@ function Round({ board, seed }: { board: BoardTiles; seed: string }) {
     return () => clearInterval(id);
   }, [finished]);
 
+  // Once time is up, show "Time's up!" for a moment, then move to the results.
+  // `replace` swaps this screen out, so Back from the results goes Home, not into a finished round.
+  useEffect(() => {
+    if (!finished) {
+      return;
+    }
+    const id = setTimeout(
+      () => router.replace({ pathname: '/results', params: { seed, found: state.found.join(',') } }),
+      RESULTS_DELAY_MS,
+    );
+    return () => clearTimeout(id);
+  }, [finished, seed, state.found]);
+
   return (
     <View style={styles.container}>
       <View style={[styles.statusBar, { width: boardSize }]}>
@@ -91,16 +105,7 @@ function Round({ board, seed }: { board: BoardTiles; seed: string }) {
           onRelease={() => dispatch({ type: 'release' })}
         />
       </View>
-      {finished ? (
-        <View style={styles.endPanel}>
-          <Text style={styles.endSummary}>
-            {state.score.toLocaleString()} points · {state.found.length} {state.found.length === 1 ? 'word' : 'words'}
-          </Text>
-          <Button label="Home" onPress={() => router.replace('/')} />
-        </View>
-      ) : (
-        <Text style={styles.seed}>Board {seed}</Text>
-      )}
+      <Text style={styles.seed}>Board {seed}</Text>
     </View>
   );
 }
@@ -161,15 +166,6 @@ const styles = StyleSheet.create({
   },
   boardFinished: {
     opacity: 0.45,
-  },
-  endPanel: {
-    alignItems: 'center',
-    gap: 12,
-  },
-  endSummary: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: colors.text,
   },
   wordSlot: {
     height: 44,
