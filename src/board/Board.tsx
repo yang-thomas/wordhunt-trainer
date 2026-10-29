@@ -17,6 +17,8 @@ interface BoardProps {
   size: number;
   /** Tiles currently selected, highlighted on the board. */
   selected: readonly number[];
+  /** Color of the selected tiles: neutral, a valid new word, or a word already found. */
+  highlight: 'selected' | 'valid' | 'duplicate';
   /** Called each time the pointer moves onto a different tile. */
   onTileEnter: (tile: number) => void;
   /** Called when the finger lifts or the mouse button is released. */
@@ -27,7 +29,7 @@ interface BoardProps {
 // mouse drags from selecting the letters as text.
 const noBrowserGestures = { touchAction: 'none', userSelect: 'none' } as ViewStyle;
 
-export function Board({ board, size, selected, onTileEnter, onRelease }: BoardProps) {
+export function Board({ board, size, selected, highlight, onTileEnter, onRelease }: BoardProps) {
   // The PanResponder is created once, so it reads the latest props through a ref.
   const latest = useRef({ size, onTileEnter, onRelease });
   latest.current = { size, onTileEnter, onRelease };
@@ -71,7 +73,7 @@ export function Board({ board, size, selected, onTileEnter, onRelease }: BoardPr
         return (
           <View
             key={index}
-            style={[styles.tile, isSelected && styles.tileSelected, { width: tilePx, height: tilePx }]}
+            style={[styles.tile, isSelected && styles[highlight], { width: tilePx, height: tilePx }]}
           >
             <Text style={[styles.letter, isSelected && styles.letterSelected, { fontSize: tilePx * 0.5 }]}>
               {letter.toUpperCase()}
@@ -97,9 +99,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  tileSelected: {
+  selected: {
     backgroundColor: colors.tileSelected,
-    borderColor: colors.tileSelectedBorder,
+    borderColor: colors.tileSelected,
+  },
+  valid: {
+    backgroundColor: colors.tileValid,
+    borderColor: colors.tileValid,
+  },
+  duplicate: {
+    backgroundColor: colors.tileDuplicate,
+    borderColor: colors.tileDuplicate,
   },
   letter: {
     color: colors.tileText,
