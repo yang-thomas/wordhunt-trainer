@@ -1,18 +1,29 @@
-import { Redirect, useLocalSearchParams } from 'expo-router';
-import { useMemo, useReducer } from 'react';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
+import { useEffect, useMemo, useReducer } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Board } from '../src/board/Board';
+import { Button } from '../src/Button';
 import { getTrie } from '../src/dictionary';
 import { generateBoard, wordFromPath, type Board as BoardTiles } from '../src/game';
-import { createRound, currentWordStatus, roundReducer, type Feedback } from '../src/round/roundReducer';
+import {
+  createRound,
+  currentWordStatus,
+  roundReducer,
+  secondsLeft,
+  type Feedback,
+} from '../src/round/roundReducer';
 import { colors } from '../src/theme';
 
 const MAX_BOARD_SIZE = 420;
 const SIDE_PADDING = 16;
 /** Board size as a fraction of the space available. Smaller = less finger travel on a phone. */
 const BOARD_SCALE = 0.75;
-/** Extra space above the board, in pixels. */
-const BOARD_TOP_OFFSET = 100;
+/** Extra space above the score bar, word, and board together, in pixels. Pushes the board down toward the thumb. */
+const CONTENT_TOP_OFFSET = 100;
+/** How often the clock is checked, in ms. The deadline itself is a timestamp, so this only sets how fresh the display is. */
+const TICK_MS = 200;
+/** The timer turns red when this many seconds or fewer remain. */
+const LOW_TIME_SECONDS = 10;
 
 export default function GameScreen() {
   // Query-string values from the URL, e.g. /game?seed=k3x9q2
@@ -28,23 +39,40 @@ export default function GameScreen() {
 
 function Round({ board, seed }: { board: BoardTiles; seed: string }) {
   const { width } = useWindowDimensions();
-  const [state, dispatch] = useReducer(roundReducer, undefined, () => createRound(board, getTrie()));
+  const [state, dispatch] = useReducer(roundReducer, undefined, () =>
+    createRound(board, getTrie(), Date.now()),
+  );
 
   const boardSize = Math.round(Math.min(width - SIDE_PADDING * 2, MAX_BOARD_SIZE) * BOARD_SCALE);
   const status = currentWordStatus(state);
   const dragging = state.path.length > 0;
+  const finished = state.status === 'finished';
+  const remaining = secondsLeft(state);
+
+  // Check the clock regularly until the round ends. A timer that just subtracts 1 each
+  // second drifts when the page is throttled; comparing against the end time does not.
+  useEffect(() => {
+    if (finished) {
+      return;
+    }
+    const id = setInterval(() => dispatch({ type: 'tick', now: Date.now() }), TICK_MS);
+    return () => clearInterval(id);
+  }, [finished]);
 
   return (
     <View style={styles.container}>
       <View style={[styles.statusBar, { width: boardSize }]}>
         <Text style={styles.score}>{state.score.toLocaleString()}</Text>
+        <Text style={[styles.timer, remaining <= LOW_TIME_SECONDS && styles.timerLow]}>{formatClock(remaining)}</Text>
         <Text style={styles.wordCount}>
           {state.found.length} {state.found.length === 1 ? 'word' : 'words'}
         </Text>
       </View>
 
       <View style={styles.wordSlot}>
-        {dragging ? (
+        {finished ? (
+          <Text style={[styles.feedback, { color: colors.text }]}>Time's up!</Text>
+        ) : dragging ? (
           <Text style={[styles.currentWord, { color: STATUS_COLORS[status] }]}>
             {wordFromPath(board, state.path).toUpperCase()}
           </Text>
@@ -53,7 +81,7 @@ function Round({ board, seed }: { board: BoardTiles; seed: string }) {
         )}
       </View>
 
-      <View style={styles.boardArea}>
+      <View style={finished && styles.boardFinished}>
         <Board
           board={board}
           size={boardSize}
@@ -63,9 +91,25 @@ function Round({ board, seed }: { board: BoardTiles; seed: string }) {
           onRelease={() => dispatch({ type: 'release' })}
         />
       </View>
-      <Text style={styles.seed}>Board {seed}</Text>
+      {finished ? (
+        <View style={styles.endPanel}>
+          <Text style={styles.endSummary}>
+            {state.score.toLocaleString()} points · {state.found.length} {state.found.length === 1 ? 'word' : 'words'}
+          </Text>
+          <Button label="Home" onPress={() => router.replace('/')} />
+        </View>
+      ) : (
+        <Text style={styles.seed}>Board {seed}</Text>
+      )}
     </View>
   );
+}
+
+/** 90 → "1:30", 5 → "0:05" */
+function formatClock(totalSeconds: number): string {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 }
 
 const STATUS_COLORS = { valid: colors.valid, duplicate: colors.duplicate, none: colors.text };
@@ -88,7 +132,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
-    paddingTop: 16,
+    paddingTop: 16 + CONTENT_TOP_OFFSET,
     paddingHorizontal: SIDE_PADDING,
     gap: 12,
   },
@@ -102,13 +146,30 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.text,
   },
+  timer: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: colors.text,
+    fontVariant: ['tabular-nums'], // equal-width digits, so the clock doesn't jiggle
+  },
+  timerLow: {
+    color: colors.invalid,
+  },
   wordCount: {
     fontSize: 16,
     color: colors.textMuted,
   },
-  boardArea: {
-    // Pushes the board down toward the thumb; the score and word stay at the top
-    marginTop: BOARD_TOP_OFFSET,
+  boardFinished: {
+    opacity: 0.45,
+  },
+  endPanel: {
+    alignItems: 'center',
+    gap: 12,
+  },
+  endSummary: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: colors.text,
   },
   wordSlot: {
     height: 44,

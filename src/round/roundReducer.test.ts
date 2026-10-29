@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { TEST_BOARD, TEST_TRIE } from '../game/fixtures';
-import { createRound, currentWordStatus, roundReducer, type RoundAction, type RoundState } from './roundReducer';
+import {
+  ROUND_SECONDS,
+  createRound,
+  currentWordStatus,
+  roundReducer,
+  secondsLeft,
+  type RoundAction,
+  type RoundState,
+} from './roundReducer';
 
 //  c  a  t  s      0  1  2  3
 //  x  o  g  e      4  5  6  7
@@ -8,7 +16,9 @@ import { createRound, currentWordStatus, roundReducer, type RoundAction, type Ro
 //  x  x  x  x     12 13 14 15
 // Words: cat, cats, taco, gee, sex (plus unreachable ones)
 
-const start = () => createRound(TEST_BOARD, TEST_TRIE);
+const START = 1_000_000; // an arbitrary clock reading in ms
+const start = () => createRound(TEST_BOARD, TEST_TRIE, START);
+const END = START + ROUND_SECONDS * 1000;
 
 function run(state: RoundState, ...actions: RoundAction[]): RoundState {
   return actions.reduce(roundReducer, state);
@@ -85,6 +95,69 @@ describe('roundReducer', () => {
     // c-a-t-s, back onto t: submits "cat"
     const state = drag(start(), [0, 1, 2, 3, 2]);
     expect(state.found).toEqual(['cat']);
+  });
+});
+
+describe('timer', () => {
+  it('lasts 90 seconds', () => {
+    expect(ROUND_SECONDS).toBe(90);
+    expect(secondsLeft(start())).toBe(90);
+  });
+
+  it('counts down as the clock ticks', () => {
+    const state = roundReducer(start(), { type: 'tick', now: START + 30_000 });
+    expect(state.status).toBe('playing');
+    expect(secondsLeft(state)).toBe(60);
+  });
+
+  it('rounds partial seconds up, so 0 appears only when time is up', () => {
+    expect(secondsLeft(roundReducer(start(), { type: 'tick', now: START + 100 }))).toBe(90);
+    expect(secondsLeft(roundReducer(start(), { type: 'tick', now: START + 89_001 }))).toBe(1);
+    expect(secondsLeft(roundReducer(start(), { type: 'tick', now: END - 1 }))).toBe(1);
+  });
+
+  it('finishes exactly when time runs out', () => {
+    const state = roundReducer(start(), { type: 'tick', now: END });
+    expect(state.status).toBe('finished');
+    expect(secondsLeft(state)).toBe(0);
+  });
+
+  it('finishes even if the first tick after the deadline is very late', () => {
+    // e.g. the phone's browser tab was in the background for 5 minutes
+    const state = roundReducer(start(), { type: 'tick', now: END + 300_000 });
+    expect(state.status).toBe('finished');
+    expect(secondsLeft(state)).toBe(0);
+  });
+
+  it('keeps the score and found words when the round ends', () => {
+    const scored = drag(start(), [0, 1, 2]);
+    const done = roundReducer(scored, { type: 'tick', now: END });
+    expect(done.found).toEqual(['cat']);
+    expect(done.score).toBe(100);
+  });
+
+  it('throws away a word still being dragged when time runs out', () => {
+    const dragging = run(start(), { type: 'enterTile', tile: 0 }, { type: 'enterTile', tile: 1 }, { type: 'enterTile', tile: 2 });
+    const done = roundReducer(dragging, { type: 'tick', now: END });
+    expect(done.path).toEqual([]);
+    expect(done.found).toEqual([]);
+    expect(done.score).toBe(0);
+  });
+
+  it('ignores drags and releases after the round has finished', () => {
+    const done = roundReducer(start(), { type: 'tick', now: END });
+    expect(roundReducer(done, { type: 'enterTile', tile: 0 })).toBe(done);
+    expect(roundReducer(done, { type: 'release' })).toBe(done);
+  });
+
+  it('ignores further ticks after the round has finished', () => {
+    const done = roundReducer(start(), { type: 'tick', now: END });
+    expect(roundReducer(done, { type: 'tick', now: END + 5000 })).toBe(done);
+  });
+
+  it('still accepts words right up to the deadline', () => {
+    const late = roundReducer(start(), { type: 'tick', now: END - 1 });
+    expect(drag(late, [0, 1, 2]).score).toBe(100);
   });
 });
 

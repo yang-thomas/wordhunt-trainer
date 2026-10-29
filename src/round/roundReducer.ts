@@ -6,9 +6,18 @@ export type Feedback =
   | { kind: 'valid'; word: string; points: number }
   | { kind: 'duplicate' | 'not-a-word' | 'too-short'; word: string };
 
+/** How long a round lasts. */
+export const ROUND_SECONDS = 90;
+
 export interface RoundState {
   board: Board;
   trie: TrieNode;
+  status: 'playing' | 'finished';
+  /** Timestamp (ms) when time runs out. Storing the end time, not a countdown, keeps it
+   *  correct even when a phone throttles the page's timers in the background. */
+  endsAt: number;
+  /** The most recent clock reading (ms), updated by 'tick'. */
+  now: number;
   /** Tiles selected in the current drag. */
   path: readonly number[];
   /** Words found so far, in the order they were found. */
@@ -17,14 +26,46 @@ export interface RoundState {
   feedback: Feedback | null;
 }
 
-export type RoundAction = { type: 'enterTile'; tile: number } | { type: 'release' };
+export type RoundAction =
+  | { type: 'enterTile'; tile: number }
+  | { type: 'release' }
+  | { type: 'tick'; now: number };
 
-export function createRound(board: Board, trie: TrieNode): RoundState {
-  return { board, trie, path: [], found: [], score: 0, feedback: null };
+/** `startedAt` is a clock reading in ms (Date.now()). It's a parameter so the reducer stays pure. */
+export function createRound(board: Board, trie: TrieNode, startedAt: number): RoundState {
+  return {
+    board,
+    trie,
+    status: 'playing',
+    endsAt: startedAt + ROUND_SECONDS * 1000,
+    now: startedAt,
+    path: [],
+    found: [],
+    score: 0,
+    feedback: null,
+  };
+}
+
+/** Whole seconds left, rounded up so the display reads 0 only once time is really up. */
+export function secondsLeft(state: RoundState): number {
+  return Math.max(0, Math.ceil((state.endsAt - state.now) / 1000));
 }
 
 /** Every change to a round goes through here: (current state, action) → next state. */
 export function roundReducer(state: RoundState, action: RoundAction): RoundState {
+  if (action.type === 'tick') {
+    if (state.status === 'finished') {
+      return state;
+    }
+    if (action.now >= state.endsAt) {
+      // Time's up: a word still being dragged is thrown away, not scored
+      return { ...state, now: state.endsAt, status: 'finished', path: [], feedback: null };
+    }
+    return { ...state, now: action.now };
+  }
+  if (state.status === 'finished') {
+    return state;
+  }
   switch (action.type) {
     case 'enterTile': {
       const path = nextPath(state.path, action.tile);
