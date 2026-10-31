@@ -7,9 +7,11 @@ interface ButtonProps {
   disabled?: boolean;
   /** 'secondary' is an outlined button for less important actions. */
   variant?: 'primary' | 'secondary';
+  /** Smaller, for buttons that sit side by side. */
+  compact?: boolean;
 }
 
-export function Button({ label, onPress, disabled = false, variant = 'primary' }: ButtonProps) {
+export function Button({ label, onPress, disabled = false, variant = 'primary', compact = false }: ButtonProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -17,11 +19,14 @@ export function Button({ label, onPress, disabled = false, variant = 'primary' }
       style={({ pressed }) => [
         styles.button,
         variant === 'secondary' && styles.secondary,
+        compact && styles.compact,
         disabled && styles.disabled,
         pressed && styles.pressed,
       ]}
     >
-      <Text style={[styles.label, variant === 'secondary' && styles.secondaryLabel]}>{label}</Text>
+      <Text style={[styles.label, variant === 'secondary' && styles.secondaryLabel, compact && styles.compactLabel]}>
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -34,6 +39,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     minWidth: 220,
+  },
+  compact: {
+    minWidth: 0,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
   secondary: {
     backgroundColor: 'transparent',
@@ -53,5 +63,8 @@ const styles = StyleSheet.create({
   },
   secondaryLabel: {
     color: colors.primary,
+  },
+  compactLabel: {
+    fontSize: 16,
   },
 });

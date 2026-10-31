@@ -1,9 +1,9 @@
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { boardLabel, resolveBoard } from '../src/board/boardId';
 import { Button } from '../src/Button';
 import { getTrie } from '../src/dictionary';
-import { generateBoard } from '../src/game';
 import { buildResults, parseFoundParam, type ResultWord } from '../src/round/results';
 import { newSeed } from '../src/seeds';
 import { colors } from '../src/theme';
@@ -14,6 +14,8 @@ export default function ResultsScreen() {
   // e.g. /results?seed=k3x9q2&found=cat,dog,bird
   const { seed, found } = useLocalSearchParams<{ seed?: string; found?: string }>();
   const [tab, setTab] = useState<Tab>('all');
+  // Hidden at first so the words aren't spoiled before you replay the board
+  const [showWords, setShowWords] = useState(false);
 
   // The board and its word list are rebuilt from the seed, so the URL only has to carry the seed and your words.
   const results = useMemo(() => {
@@ -21,7 +23,8 @@ export default function ResultsScreen() {
       return null;
     }
     const trie = getTrie();
-    return buildResults(generateBoard(seed, trie), trie, parseFoundParam(found));
+    const board = resolveBoard(seed, trie);
+    return board ? buildResults(board, trie, parseFoundParam(found)) : null;
   }, [seed, found]);
 
   if (!seed || !results) {
@@ -37,42 +40,51 @@ export default function ResultsScreen() {
           Found {results.foundCount} of {results.totalCount} words
         </Text>
         <Text style={styles.statsMuted}>Best possible: {results.maxScore.toLocaleString()} points</Text>
+        <Text style={styles.board}>{boardLabel(seed)}</Text>
         <View style={styles.buttons}>
           {/* Same seed = same board, so replaying is just opening the game with this seed again */}
           <Button label="Replay this board" onPress={() => router.replace({ pathname: '/game', params: { seed } })} />
           <Button label="New board" onPress={() => router.replace({ pathname: '/game', params: { seed: newSeed() } })} />
           <Button label="Home" variant="secondary" onPress={() => router.replace('/')} />
+          <Button
+            label={showWords ? 'Hide words' : 'Show words'}
+            variant="secondary"
+            onPress={() => setShowWords((shown) => !shown)}
+          />
         </View>
       </View>
 
-      <View style={styles.tabs}>
-        <TabButton label={`All words (${results.totalCount})`} active={tab === 'all'} onPress={() => setTab('all')} />
-        <TabButton label={`Your words (${results.foundCount})`} active={tab === 'mine'} onPress={() => setTab('mine')} />
-      </View>
+      {showWords && (
+        <>
+          <View style={styles.tabs}>
+            <TabButton label={`All words (${results.totalCount})`} active={tab === 'all'} onPress={() => setTab('all')} />
+            <TabButton label={`Your words (${results.foundCount})`} active={tab === 'mine'} onPress={() => setTab('mine')} />
+          </View>
 
-      {tab === 'all' ? (
-        results.groups.map((group) => (
-          <View key={group.length} style={styles.group}>
-            <Text style={styles.groupTitle}>
-              {group.length} letters · {group.foundCount}/{group.words.length} found
-            </Text>
+          {tab === 'all' ? (
+            results.groups.map((group) => (
+              <View key={group.length} style={styles.group}>
+                <Text style={styles.groupTitle}>
+                  {group.length} letters · {group.foundCount}/{group.words.length} found
+                </Text>
+                <View style={styles.chips}>
+                  {group.words.map((entry) => (
+                    <WordChip key={entry.word} entry={entry} />
+                  ))}
+                </View>
+              </View>
+            ))
+          ) : results.foundWords.length === 0 ? (
+            <Text style={styles.empty}>You didn't find any words this round.</Text>
+          ) : (
             <View style={styles.chips}>
-              {group.words.map((entry) => (
-                <WordChip key={entry.word} entry={entry} />
+              {results.foundWords.map((entry) => (
+                <WordChip key={entry.word} entry={entry} showPoints />
               ))}
             </View>
-          </View>
-        ))
-      ) : results.foundWords.length === 0 ? (
-        <Text style={styles.empty}>You didn't find any words this round.</Text>
-      ) : (
-        <View style={styles.chips}>
-          {results.foundWords.map((entry) => (
-            <WordChip key={entry.word} entry={entry} showPoints />
-          ))}
-        </View>
+          )}
+        </>
       )}
-      <Text style={styles.seed}>Board {seed}</Text>
     </ScrollView>
   );
 }
@@ -195,10 +207,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: 24,
   },
-  seed: {
-    textAlign: 'center',
+  board: {
+    marginTop: 4,
     fontSize: 14,
     color: colors.textMuted,
-    marginTop: 8,
   },
 });

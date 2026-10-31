@@ -2,8 +2,10 @@ import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useReducer } from 'react';
 import { StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { Board } from '../src/board/Board';
+import { resolveBoard } from '../src/board/boardId';
+import { ConfirmButton } from '../src/ConfirmButton';
 import { getTrie } from '../src/dictionary';
-import { generateBoard, wordFromPath, type Board as BoardTiles } from '../src/game';
+import { wordFromPath, type Board as BoardTiles } from '../src/game';
 import {
   createRound,
   currentWordStatus,
@@ -11,6 +13,7 @@ import {
   secondsLeft,
   type Feedback,
 } from '../src/round/roundReducer';
+import { newSeed } from '../src/seeds';
 import { colors } from '../src/theme';
 
 const MAX_BOARD_SIZE = 420;
@@ -18,7 +21,7 @@ const SIDE_PADDING = 16;
 /** Board size as a fraction of the space available. Smaller = less finger travel on a phone. */
 const BOARD_SCALE = 0.75;
 /** Extra space above the score bar, word, and board together, in pixels. Pushes the board down toward the thumb. */
-const CONTENT_TOP_OFFSET = 100;
+const CONTENT_TOP_OFFSET = 80;
 /** How often the clock is checked, in ms. The deadline itself is a timestamp, so this only sets how fresh the display is. */
 const TICK_MS = 200;
 /** How long "Time's up!" shows before moving to the results, in ms. */
@@ -27,9 +30,9 @@ const RESULTS_DELAY_MS = 1500;
 const LOW_TIME_SECONDS = 10;
 
 export default function GameScreen() {
-  // Query-string values from the URL, e.g. /game?seed=k3x9q2
+  // Query-string values from the URL, e.g. /game?seed=k3x9q2 (or /game?seed=custom-abcdefghijklmnop)
   const { seed } = useLocalSearchParams<{ seed?: string }>();
-  const board = useMemo(() => (seed ? generateBoard(seed, getTrie()) : null), [seed]);
+  const board = useMemo(() => (seed ? resolveBoard(seed, getTrie()) : null), [seed]);
 
   if (!seed || !board) {
     return <Redirect href="/" />;
@@ -66,10 +69,7 @@ function Round({ board, seed }: { board: BoardTiles; seed: string }) {
     if (!finished) {
       return;
     }
-    const id = setTimeout(
-      () => router.replace({ pathname: '/results', params: { seed, found: state.found.join(',') } }),
-      RESULTS_DELAY_MS,
-    );
+    const id = setTimeout(() => router.replace(resultsHref(seed, state.found)), RESULTS_DELAY_MS);
     return () => clearTimeout(id);
   }, [finished, seed, state.found]);
 
@@ -105,9 +105,27 @@ function Round({ board, seed }: { board: BoardTiles; seed: string }) {
           onRelease={() => dispatch({ type: 'release' })}
         />
       </View>
-      <Text style={styles.seed}>Board {seed}</Text>
+
+      {!finished && (
+        <View style={[styles.actions, { width: boardSize }]}>
+          <View style={styles.action}>
+            <ConfirmButton label="End game" onConfirm={() => router.replace(resultsHref(seed, state.found))} />
+          </View>
+          <View style={styles.action}>
+            <ConfirmButton
+              label="New board"
+              onConfirm={() => router.replace({ pathname: '/game', params: { seed: newSeed() } })}
+            />
+          </View>
+        </View>
+      )}
     </View>
   );
+}
+
+/** Where to go when a round ends: the results screen, carrying the board and the words found. */
+function resultsHref(seed: string, found: readonly string[]) {
+  return { pathname: '/results', params: { seed, found: found.join(',') } } as const;
 }
 
 /** 90 → "1:30", 5 → "0:05" */
@@ -180,8 +198,12 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
   },
-  seed: {
-    color: colors.textMuted,
-    fontSize: 14,
+  actions: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 4,
+  },
+  action: {
+    flex: 1,
   },
 });
