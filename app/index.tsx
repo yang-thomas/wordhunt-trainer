@@ -11,7 +11,7 @@ export default function HomeScreen() {
       <Text style={styles.subtitle}>Find as many words as you can in 90 seconds.</Text>
       <View style={styles.buttons}>
         <Button label="New game" onPress={() => router.push({ pathname: '/game', params: { seed: newSeed() } })} />
-        <Button label="Custom board" onPress={() => {}} disabled />
+        <Button label="Custom board" onPress={() => router.push('/custom')} />
       </View>
     </View>
   );

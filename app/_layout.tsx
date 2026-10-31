@@ -16,6 +16,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="index" options={{ title: 'Word Hunt Trainer', headerShown: false }} />
+        <Stack.Screen name="custom" options={{ title: 'Custom board' }} />
         <Stack.Screen name="game" options={{ title: 'Game' }} />
         <Stack.Screen name="results" options={{ title: 'Results' }} />
       </Stack>

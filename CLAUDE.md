@@ -17,6 +17,9 @@ board, create custom boards, accounts with stats (high score, average, win/loss)
 - All game logic lives in src/game/ as pure TypeScript functions with no
   React, Expo, or Supabase imports.
 - Boards are generated from a seed; same seed = same board.
+- A board is identified by one string, the `seed` URL param: a random seed, or
+  `custom-<16 letters>` for a custom board (see src/board/boardId.ts). Phase 3
+  adds a proper place to store saved boards.
 - Saved games store the list of words found, not just the score.
 
 ## Scoring
